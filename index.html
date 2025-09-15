@@ -1,63 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audiobook DJ Turntable</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div class="turntable-container">
-        <h1 class="title">Audiobook DJ</h1>
-        
-        <div class="turntable">
-            <div class="vinyl" id="vinyl">
-                <div class="groove" style="width: 90%; height: 90%;"></div>
-                <div class="groove" style="width: 70%; height: 70%;"></div>
-                <div class="groove" style="width: 50%; height: 50%;"></div>
-                <div class="groove" style="width: 30%; height: 30%;"></div>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Audiobook DJ Turntable</title>
+        <link rel="stylesheet" href="styles.css" />
+    </head>
+    <body>
+        <div class="turntable-container">
+            <h1 class="title">Audiobook DJ</h1>
+
+            <div class="turntable">
+                <div class="vinyl" id="vinyl">
+                    <div class="groove" style="width: 90%; height: 90%"></div>
+                    <div class="groove" style="width: 70%; height: 70%"></div>
+                    <div class="groove" style="width: 50%; height: 50%"></div>
+                    <div class="groove" style="width: 30%; height: 30%"></div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="file-input-wrapper">
+                    <input type="file" id="audioFile" accept="audio/*" />
+                    <label for="audioFile" class="file-input-label">
+                        📚 Load Audiobook
+                    </label>
+                </div>
+
+                <div class="playback-controls">
+                    <button id="playBtn">▶️ Play</button>
+                    <button id="pauseBtn">⏸️ Pause</button>
+                    <button id="resetBtn">⏹️ Reset</button>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <div class="info-row">
+                    <span class="info-label">Speed:</span>
+                    <span class="info-value" id="speedDisplay">1.0x</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Direction:</span>
+                    <span class="info-value" id="directionDisplay"
+                        >Forward</span
+                    >
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Time:</span>
+                    <span class="info-value" id="timeDisplay">0:00 / 0:00</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+            </div>
+
+            <div class="instructions">
+                🎧 Click and drag the vinyl • Clockwise = Speed up playback •
+                Counter-clockwise = Jump back 5s per ~15° rotation<br />
+                Dragging stops resets speed to 1x • Smooth, precise navigation
             </div>
         </div>
 
-        <div class="controls">
-            <div class="file-input-wrapper">
-                <input type="file" id="audioFile" accept="audio/*">
-                <label for="audioFile" class="file-input-label">
-                    📚 Load Audiobook
-                </label>
-            </div>
-
-            <div class="playback-controls">
-                <button id="playBtn">▶️ Play</button>
-                <button id="pauseBtn">⏸️ Pause</button>
-                <button id="resetBtn">⏹️ Reset</button>
-            </div>
-        </div>
-
-        <div class="info-panel">
-            <div class="info-row">
-                <span class="info-label">Speed:</span>
-                <span class="info-value" id="speedDisplay">1.0x</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Direction:</span>
-                <span class="info-value" id="directionDisplay">Forward</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Time:</span>
-                <span class="info-value" id="timeDisplay">0:00 / 0:00</span>
-            </div>
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
-        </div>
-
-        <div class="instructions">
-            🎧 Click and drag the vinyl to scratch • Clockwise = Forward • Counter-clockwise = Reverse with word chunks<br>
-            Speed depends on how fast you spin • Perfect for audiobook navigation
-        </div>
-    </div>
-
-    <script src="script.js"></script>
-</body>
+        <script src="script.js"></script>
+    </body>
 </html>
