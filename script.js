@@ -47,6 +47,7 @@ class AudiobookDJ {
         // Timing used only for basic state tracking
         this.lastDragTime = 0;
         this.dragDuration = 0;
+        this.activeTouchId = null; // track active touch for mobile
 
         this.initEventListeners();
         this.animationLoop();
@@ -63,17 +64,53 @@ class AudiobookDJ {
         document.addEventListener("mousemove", (e) => this.drag(e));
         document.addEventListener("mouseup", () => this.stopDrag());
 
-        // Touch support
-        this.vinyl.addEventListener("touchstart", (e) =>
-            this.startDrag(e.touches[0])
+        // Touch support (mobile)
+        this.vinyl.addEventListener(
+            "touchstart",
+            (e) => {
+                if (e.touches && e.touches.length) {
+                    const t = e.touches[0];
+                    this.activeTouchId = t.identifier ?? null;
+                    this.startDrag(t);
+                }
+            },
+            { passive: false }
         );
-        document.addEventListener("touchmove", (e) => {
-            if (this.isDragging) {
+        document.addEventListener(
+            "touchmove",
+            (e) => {
+                if (!this.isDragging) return;
                 e.preventDefault();
-                this.drag(e.touches[0]);
-            }
-        });
-        document.addEventListener("touchend", () => this.stopDrag());
+                let t = null;
+                if (this.activeTouchId != null) {
+                    for (let i = 0; i < e.touches.length; i++) {
+                        if (e.touches[i].identifier === this.activeTouchId) {
+                            t = e.touches[i];
+                            break;
+                        }
+                    }
+                }
+                if (!t && e.touches && e.touches.length) t = e.touches[0];
+                if (t) this.drag(t);
+            },
+            { passive: false }
+        );
+        document.addEventListener(
+            "touchend",
+            () => {
+                this.activeTouchId = null;
+                this.stopDrag();
+            },
+            { passive: false }
+        );
+        document.addEventListener(
+            "touchcancel",
+            () => {
+                this.activeTouchId = null;
+                this.stopDrag();
+            },
+            { passive: false }
+        );
 
         // Audio events
         this.audio.addEventListener("timeupdate", () => this.updateDisplay());
@@ -94,9 +131,14 @@ class AudiobookDJ {
 
     play() {
         if (this.audio.src && !this.isPlaying) {
-            this.audio.play();
+            const p = this.audio.play();
             this.isPlaying = true;
-            this.vinyl.classList.add("spinning");
+            if (!this.isDragging) {
+                this.vinyl.classList.add("spinning");
+            }
+            if (p && typeof p.catch === "function") {
+                p.catch(() => {});
+            }
         }
     }
 
@@ -139,6 +181,14 @@ class AudiobookDJ {
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
         this.lastAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+
+        // Ensure audio is playing while dragging (mobile-friendly: called within user gesture)
+        if (this.audio.src && !this.isPlaying) {
+            // Use class method to keep flags in sync; ignore promise rejection
+            try {
+                this.play();
+            } catch (_) {}
+        }
     }
 
     drag(e) {

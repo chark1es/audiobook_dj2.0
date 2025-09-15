@@ -69,6 +69,10 @@ body {
     cursor: grab;
     transition: none;
     user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    touch-action: none; /* prevent browser gestures on mobile */
+    -ms-touch-action: none;
     box-shadow: 
         0 5px 15px rgba(0, 0, 0, 0.3),
         inset 0 0 20px rgba(255, 255, 255, 0.05);
