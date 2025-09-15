@@ -22,9 +22,17 @@ class AudiobookDJ {
 
         // Rotation handling and thresholds
         this.angleDeadzoneRad = 0.05; // ~2.9° deadzone to avoid jitter
-        this.maxPlaybackRate = 3.0; // clamp for CW speed up
-        this.cwRatePerRad = 0.15; // slower cumulative rate increase per radian (needs ~2+ rotations to max)
+        this.maxPlaybackRate = 5.0; // clamp for CW speed up
+        this.cwRatePerRad = 0.15; // slower cumulative rate increase per radian (needs multiple rotations to max)
         this.cwPlaybackRate = 1.0; // accumulative CW rate while dragging
+        this.isCWScrub = false; // when true, CW controls time instead of speed
+        this.cwScrubEnterVel = 22.0; // rad/s threshold to ENTER CW seek mode (higher = harder)
+        this.cwScrubExitVel = 10.0; // rad/s threshold to EXIT CW seek mode
+        this.cwScrubExitHoldMs = 300; // must stay below exit vel for this long to exit
+        this.cwScrubBelowExitSince = 0; // timestamp when fell below exit vel
+        this.cwSeekAngleStepDeg = 45; // degrees per forward seek step (CW fast mode)
+        this.cwSeekStepSeconds = 1; // seconds jumped forward per step (CW fast mode)
+        this.cwAngleAccumulatorDeg = 0; // accumulates CW rotation for forward seek steps
 
         // Direction switching hysteresis
         this.directionLock = 0; // 0 = none, 1 = CW, -1 = CCW
@@ -108,6 +116,9 @@ class AudiobookDJ {
         this.cwPlaybackRate = 1.0;
         this.directionLock = 0;
         this.switchAccumNegDeg = 0;
+        this.isCWScrub = false;
+        this.cwAngleAccumulatorDeg = 0;
+        this.cwScrubBelowExitSince = 0;
         this.vinyl.style.transform = `rotate(0deg)`;
         this.speedDisplay.textContent = `1.0x`;
         this.directionDisplay.textContent = "Forward";
@@ -157,6 +168,11 @@ class AudiobookDJ {
         // Determine direction based on deltaAngle sign
         const isCW = deltaAngle > 0;
 
+        // Compute angular velocity (rad/s) to detect very fast spins
+        const now = Date.now();
+        const dtSec = Math.max(0.0001, (now - this.lastDragTime) / 1000);
+        const angVel = Math.abs(deltaAngle) / dtSec; // rad/s
+
         if (isCW) {
             // Lock to CW and clear CCW switching accumulator
             this.directionLock = 1;
@@ -165,15 +181,53 @@ class AudiobookDJ {
             // Reset CCW accumulator when switching to CW
             this.ccwAngleAccumulatorDeg = 0;
 
-            // Monotonic increase of speed while rotating CW
-            this.cwPlaybackRate = Math.min(
-                this.maxPlaybackRate,
-                this.cwPlaybackRate + Math.abs(deltaAngle) * this.cwRatePerRad
-            );
-            this.playbackRate = this.cwPlaybackRate;
-            this.audio.playbackRate = this.playbackRate;
-            this.directionDisplay.textContent = "Clockwise (Speed)";
-            this.speedDisplay.textContent = `${this.playbackRate.toFixed(1)}x`;
+            // Hysteresis around seek vs speed to prevent flapping
+            if (this.isCWScrub) {
+                if (angVel <= this.cwScrubExitVel) {
+                    // Start or continue exit hold timer
+                    if (!this.cwScrubBelowExitSince) this.cwScrubBelowExitSince = now;
+                    if (now - this.cwScrubBelowExitSince >= this.cwScrubExitHoldMs) {
+                        // Exit seek mode only after sustained slow movement
+                        this.isCWScrub = false;
+                        this.cwAngleAccumulatorDeg = 0;
+                        this.cwScrubBelowExitSince = 0;
+                    }
+                } else {
+                    // Still fast; reset exit hold timer
+                    this.cwScrubBelowExitSince = 0;
+                }
+            } else if (angVel >= this.cwScrubEnterVel) {
+                // Enter seek mode at high angular velocity
+                this.isCWScrub = true;
+                this.cwAngleAccumulatorDeg = 0; // start fresh steps
+                this.cwScrubBelowExitSince = 0;
+            }
+
+            if (this.isCWScrub) {
+                // Fast CW: seek forward instead of adjusting speed
+                this.cwAngleAccumulatorDeg += Math.abs(deltaAngle) * (180 / Math.PI);
+                this.playbackRate = 1.0;
+                this.audio.playbackRate = 1.0;
+                this.directionDisplay.textContent = "Clockwise (Seek)";
+                this.speedDisplay.textContent = `1.0x`;
+
+                if (this.cwAngleAccumulatorDeg >= this.cwSeekAngleStepDeg) {
+                    const steps = Math.floor(this.cwAngleAccumulatorDeg / this.cwSeekAngleStepDeg);
+                    const secondsFwd = steps * this.cwSeekStepSeconds;
+                    this.audio.currentTime = Math.min(this.audio.duration || Infinity, this.audio.currentTime + secondsFwd);
+                    this.cwAngleAccumulatorDeg -= steps * this.cwSeekAngleStepDeg;
+                }
+            } else {
+                // Normal CW: adjust speed cumulatively
+                this.cwPlaybackRate = Math.min(
+                    this.maxPlaybackRate,
+                    this.cwPlaybackRate + Math.abs(deltaAngle) * this.cwRatePerRad
+                );
+                this.playbackRate = this.cwPlaybackRate;
+                this.audio.playbackRate = this.playbackRate;
+                this.directionDisplay.textContent = "Clockwise (Speed)";
+                this.speedDisplay.textContent = `${this.playbackRate.toFixed(1)}x`;
+            }
         } else {
             // If currently locked CW and minor CCW jitter happens, require threshold to switch
             if (this.directionLock === 1 && this.cwPlaybackRate > 1.0) {
@@ -181,13 +235,16 @@ class AudiobookDJ {
                     Math.abs(deltaAngle) * (180 / Math.PI);
                 if (this.switchAccumNegDeg < this.switchThresholdDeg) {
                     // Ignore small CCW movement; keep current CW speed
-                    this.lastDragTime = Date.now();
+                    this.lastDragTime = now;
                     this.lastAngle = angle;
                     return;
                 }
                 // Passed threshold: switch to CCW mode and reset CW speed
                 this.directionLock = -1;
                 this.cwPlaybackRate = 1.0;
+                this.isCWScrub = false;
+                this.cwAngleAccumulatorDeg = 0;
+                this.cwScrubBelowExitSince = 0;
             }
 
             // Counter-clockwise: jump backward in timeline (no reverse playback)
@@ -195,7 +252,7 @@ class AudiobookDJ {
             this.audio.playbackRate = 1.0;
             this.playbackRate = 1.0;
             this.speedDisplay.textContent = `1.0x`;
-            this.directionDisplay.textContent = "Backwards";
+            this.directionDisplay.textContent = "Counter-Clockwise (Seek)";
 
             // Accumulate CCW rotation and seek back in steps
             this.ccwAngleAccumulatorDeg +=
@@ -213,8 +270,8 @@ class AudiobookDJ {
             }
         }
 
-        // Track time for completeness (not used for control)
-        this.lastDragTime = Date.now();
+        // Track time for threshold calculations
+        this.lastDragTime = now;
         this.lastAngle = angle;
     }
 
@@ -234,6 +291,8 @@ class AudiobookDJ {
         this.cwPlaybackRate = 1.0;
         this.directionLock = 0;
         this.switchAccumNegDeg = 0;
+        this.isCWScrub = false;
+        this.cwAngleAccumulatorDeg = 0;
     }
 
     updatePlayback() {
